@@ -63,6 +63,7 @@ import {
 import { disabledCellIds } from "@/core/cells/utils";
 import { capabilitiesAtom } from "@/core/config/capabilities";
 import { aiEnabledAtom, useResolvedMarimoConfig } from "@/core/config/config";
+import { useEmbeddingFeature } from "@/core/config/embedding";
 import { Constants } from "@/core/constants";
 import {
   updateCellOutputsWithScreenshots,
@@ -159,6 +160,13 @@ export function useNotebookActions() {
   // Browser print fallback is used in WASM.
   const serverSidePdfEnabled = !isWasm();
   const isSlidesLayout = selectedLayout === "slides";
+
+  // Embedding feature flags (Ama fork)
+  const embeddingSharingEnabled = useEmbeddingFeature("sharing");
+  const embeddingCommandPaletteEnabled = useEmbeddingFeature("command_palette");
+  const embeddingKeyboardShortcutsEnabled =
+    useEmbeddingFeature("keyboard_shortcuts");
+  const embeddingSettingsEnabled = useEmbeddingFeature("settings");
 
   const renderCheckboxElement = (checked: boolean) => (
     <div className="w-8 flex justify-end">
@@ -370,7 +378,8 @@ export function useNotebookActions() {
       label: "Share",
       handle: NOOP_HANDLER,
       hidden:
-        !sharingHtmlEnabled && !sharingWasmEnabled && !sharingMolabEnabled,
+        !embeddingSharingEnabled ||
+        (!sharingHtmlEnabled && !sharingWasmEnabled && !sharingMolabEnabled),
       dropdown: [
         {
           icon: <GlobeIcon size={14} strokeWidth={1.5} />,
@@ -626,6 +635,7 @@ export function useNotebookActions() {
       icon: <CommandIcon size={14} strokeWidth={1.5} />,
       label: "Command palette",
       hotkey: "global.commandPalette",
+      hidden: !embeddingCommandPaletteEnabled,
       handle: () => setCommandPaletteOpen((open) => !open),
     },
 
@@ -633,11 +643,13 @@ export function useNotebookActions() {
       icon: <KeyboardIcon size={14} strokeWidth={1.5} />,
       label: "Keyboard shortcuts",
       hotkey: "global.showHelp",
+      hidden: !embeddingKeyboardShortcutsEnabled,
       handle: () => setKeyboardShortcutsOpen((open) => !open),
     },
     {
       icon: <SettingsIcon size={14} strokeWidth={1.5} />,
       label: "User settings",
+      hidden: !embeddingSettingsEnabled,
       handle: () => setSettingsDialogOpen((open) => !open),
       redundant: true,
       additionalKeywords: ["preferences", "options", "configuration"],

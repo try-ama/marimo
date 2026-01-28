@@ -56,12 +56,12 @@ import {
 } from "./lazy-panels";
 import { panelLayoutAtom, useChromeActions, useChromeState } from "../state";
 import {
-  isPanelHidden,
   PANEL_MAP,
   PANELS,
   type PanelDescriptor,
   type PanelType,
 } from "../types";
+import { useEmbeddingFilteredPanels } from "@/core/config/embedding";
 import { BackendConnectionStatus } from "./footer-items/backend-status";
 import { LspStatus } from "./footer-items/lsp-status";
 import { PanelsWrapper } from "./panels";
@@ -137,16 +137,20 @@ export const AppChrome: React.FC<PropsWithChildren> = ({ children }) => {
   }, []);
 
   // Convert current developer panel items to PanelDescriptors
-  // Filter out hidden panels (e.g., terminal when capability is not available)
-  const devPanelItems = useMemo(() => {
+  // First get all panels in layout order, then apply embedding filter
+  const allDevPanelItems = useMemo(() => {
     return panelLayout.developerPanel.flatMap((id) => {
       const panel = PANEL_MAP.get(id);
-      if (!panel || isPanelHidden({ panel, capabilities, aiEnabled })) {
-        return [];
-      }
-      return [panel];
+      return panel ? [panel] : [];
     });
-  }, [panelLayout.developerPanel, capabilities, aiEnabled]);
+  }, [panelLayout.developerPanel]);
+
+  // Apply embedding filter
+  const devPanelItems = useEmbeddingFilteredPanels(
+    allDevPanelItems,
+    capabilities,
+    aiEnabled,
+  );
 
   const handleSetDevPanelItems = (items: PanelDescriptor[]) => {
     setPanelLayout((prev) => ({
@@ -180,19 +184,23 @@ export const AppChrome: React.FC<PropsWithChildren> = ({ children }) => {
 
   // Get panels available for developer panel context menu
   // Only show panels that are NOT in the sidebar
-  const availableDevPanels = useMemo(() => {
+  const allAvailableDevPanels = useMemo(() => {
     const sidebarIds = new Set(panelLayout.sidebar);
     return PANELS.filter((p) => {
-      if (isPanelHidden({ panel: p, capabilities, aiEnabled })) {
-        return false;
-      }
       // Exclude panels that are in the sidebar
       if (sidebarIds.has(p.type)) {
         return false;
       }
       return true;
     });
-  }, [panelLayout.sidebar, capabilities, aiEnabled]);
+  }, [panelLayout.sidebar]);
+
+  // Apply embedding filter
+  const availableDevPanels = useEmbeddingFilteredPanels(
+    allAvailableDevPanels,
+    capabilities,
+    aiEnabled,
+  );
 
   const emitResizeEvent = useEvent(() => {
     // HACK: Unfortunately, we have to do this twice to make sure the

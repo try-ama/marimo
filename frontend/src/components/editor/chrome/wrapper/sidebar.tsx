@@ -17,12 +17,13 @@ import { cn } from "@/utils/cn";
 import { FeedbackButton } from "../components/feedback-button";
 import { panelLayoutAtom, useChromeActions, useChromeState } from "../state";
 import {
-  isPanelHidden,
   PANEL_MAP,
   PANELS,
   type PanelDescriptor,
 } from "../types";
 import { PANEL_PRELOADERS } from "./lazy-panels";
+import { useEmbeddingFilteredPanels } from "@/core/config/embedding";
+import { IfEmbeddingFeature } from "@/core/config/IfEmbeddingFeature";
 
 export const Sidebar: React.FC = () => {
   const { selectedPanel, selectedDeveloperPanelTab, isSidebarOpen } =
@@ -40,31 +41,39 @@ export const Sidebar: React.FC = () => {
 
   // Get panels available for sidebar context menu
   // Only show panels that are NOT in the developer panel
-  const availableSidebarPanels = useMemo(() => {
+  const allAvailableSidebarPanels = useMemo(() => {
     const devPanelIds = new Set(panelLayout.developerPanel);
     return PANELS.filter((p) => {
-      if (isPanelHidden({ panel: p, capabilities, aiEnabled })) {
-        return false;
-      }
       // Exclude panels that are in the developer panel
       if (devPanelIds.has(p.type)) {
         return false;
       }
       return true;
     });
-  }, [panelLayout.developerPanel, capabilities, aiEnabled]);
+  }, [panelLayout.developerPanel]);
+
+  // Apply embedding filter
+  const availableSidebarPanels = useEmbeddingFilteredPanels(
+    allAvailableSidebarPanels,
+    capabilities,
+    aiEnabled,
+  );
 
   // Convert current sidebar items to PanelDescriptors
-  // Filter out hidden panels (e.g., when capability is not available)
-  const sidebarItems = useMemo(() => {
+  // First get all panels in layout order, then apply embedding filter
+  const allSidebarItems = useMemo(() => {
     return panelLayout.sidebar.flatMap((id) => {
       const panel = PANEL_MAP.get(id);
-      if (!panel || isPanelHidden({ panel, capabilities, aiEnabled })) {
-        return [];
-      }
-      return [panel];
+      return panel ? [panel] : [];
     });
-  }, [panelLayout.sidebar, capabilities, aiEnabled]);
+  }, [panelLayout.sidebar]);
+
+  // Apply embedding filter
+  const sidebarItems = useEmbeddingFilteredPanels(
+    allSidebarItems,
+    capabilities,
+    aiEnabled,
+  );
 
   const handleSetSidebarItems = (items: PanelDescriptor[]) => {
     setPanelLayout((prev) => ({
@@ -156,11 +165,13 @@ export const Sidebar: React.FC = () => {
           </SidebarItem>
         )}
       />
-      <FeedbackButton>
-        <SidebarItem tooltip="Send feedback!" selected={false}>
-          <MessageCircleQuestionIcon className="h-5 w-5" />
-        </SidebarItem>
-      </FeedbackButton>
+      <IfEmbeddingFeature feature="feedback">
+        <FeedbackButton>
+          <SidebarItem tooltip="Send feedback!" selected={false}>
+            <MessageCircleQuestionIcon className="h-5 w-5" />
+          </SidebarItem>
+        </FeedbackButton>
+      </IfEmbeddingFeature>
       <div className="flex-1" />
       <QueuedOrRunningStack />
     </div>
