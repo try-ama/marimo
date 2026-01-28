@@ -58,6 +58,8 @@ import {
 } from "@/core/cells/cells";
 import { disabledCellIds } from "@/core/cells/utils";
 import { useResolvedMarimoConfig } from "@/core/config/config";
+import { useEmbeddingFeature } from "@/core/config/embedding";
+import { getFeatureFlag } from "@/core/config/feature-flag";
 import { Constants } from "@/core/constants";
 import {
   updateCellOutputsWithScreenshots,
@@ -150,6 +152,19 @@ export function useNotebookActions() {
   // Browser print fallback is used in WASM.
   const serverSidePdfEnabled = !isWasm();
   const isSlidesLayout = selectedLayout === "slides";
+
+  // Embedding feature flags (Ama fork)
+  const embeddingSharingEnabled = useEmbeddingFeature("sharing");
+  const embeddingCommandPaletteEnabled = useEmbeddingFeature("command_palette");
+  const embeddingKeyboardShortcutsEnabled =
+    useEmbeddingFeature("keyboard_shortcuts");
+  const embeddingSettingsEnabled = useEmbeddingFeature("settings");
+
+  const isServerSidePdfExportEnabled = getFeatureFlag("server_side_pdf_export");
+  // With server side pdf export, it doesn't matter what mode we are in,
+  // Default export uses browser print, which is better in present mode
+  const pdfDownloadEnabled =
+    isServerSidePdfExportEnabled || viewState.mode === "present";
 
   const renderCheckboxElement = (checked: boolean) => (
     <div className="w-8 flex justify-end">
@@ -360,7 +375,9 @@ export function useNotebookActions() {
       icon: <Share2Icon size={14} strokeWidth={1.5} />,
       label: "Share",
       handle: NOOP_HANDLER,
-      hidden: !sharingHtmlEnabled && !sharingWasmEnabled,
+      hidden:
+        !embeddingSharingEnabled ||
+        (!sharingHtmlEnabled && !sharingWasmEnabled),
       dropdown: [
         {
           icon: <GlobeIcon size={14} strokeWidth={1.5} />,
@@ -582,6 +599,7 @@ export function useNotebookActions() {
       icon: <CommandIcon size={14} strokeWidth={1.5} />,
       label: "Command palette",
       hotkey: "global.commandPalette",
+      hidden: !embeddingCommandPaletteEnabled,
       handle: () => setCommandPaletteOpen((open) => !open),
     },
 
@@ -589,11 +607,13 @@ export function useNotebookActions() {
       icon: <KeyboardIcon size={14} strokeWidth={1.5} />,
       label: "Keyboard shortcuts",
       hotkey: "global.showHelp",
+      hidden: !embeddingKeyboardShortcutsEnabled,
       handle: () => setKeyboardShortcutsOpen((open) => !open),
     },
     {
       icon: <SettingsIcon size={14} strokeWidth={1.5} />,
       label: "User settings",
+      hidden: !embeddingSettingsEnabled,
       handle: () => setSettingsDialogOpen((open) => !open),
       redundant: true,
       additionalKeywords: ["preferences", "options", "configuration"],

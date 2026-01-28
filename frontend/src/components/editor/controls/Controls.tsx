@@ -31,6 +31,7 @@ import {
   useCellActions,
 } from "../../../core/cells/cells";
 import { ConfigButton } from "../../app-config/app-config-button";
+import { IfEmbeddingFeature } from "@/core/config/IfEmbeddingFeature";
 import { renderShortcut } from "../../shortcuts/renderShortcut";
 import { Tooltip } from "../../ui/tooltip";
 import { useShouldShowInterrupt } from "../cell/useShouldShowInterrupt";
@@ -130,8 +131,12 @@ export const Controls = ({
           </Button>
         </Tooltip>
 
-        <CommandPaletteButton />
-        <KeyboardShortcuts />
+        <IfEmbeddingFeature feature="command_palette">
+          <CommandPaletteButton />
+        </IfEmbeddingFeature>
+        <IfEmbeddingFeature feature="keyboard_shortcuts">
+          <KeyboardShortcuts />
+        </IfEmbeddingFeature>
 
         <div />
 
