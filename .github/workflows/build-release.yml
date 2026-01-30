@@ -87,9 +87,6 @@ jobs:
         with:
           name: marimo-build-${{ needs.build.outputs.version }}
 
-      - name: Extract assets for jsDelivr
-        run: tar -xzf marimo-assets-${{ needs.build.outputs.version }}.tar.gz
-
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.build.outputs.version }}
@@ -106,10 +103,42 @@ jobs:
 
             ### Use CDN assets
             ```bash
-            marimo edit --asset-url "https://cdn.jsdelivr.net/gh/try-ama/marimo@v${{ needs.build.outputs.version }}/_static"
+            marimo edit --asset-url "https://try-ama.github.io/marimo"
             ```
           files: |
             dist/*.whl
             marimo-assets-${{ needs.build.outputs.version }}.tar.gz
-            _static/**
           prerelease: true
+
+  # Deploy assets to GitHub Pages (avoids release asset rate limits)
+  deploy-assets:
+    needs: build
+    if: github.ref == 'refs/heads/main' || github.event.inputs.create_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: marimo-build-${{ needs.build.outputs.version }}
+
+      - name: Extract assets
+        run: tar -xzf marimo-assets-${{ needs.build.outputs.version }}.tar.gz
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload to Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _static
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
