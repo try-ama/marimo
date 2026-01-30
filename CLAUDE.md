@@ -117,10 +117,22 @@ uvx hatch run fork-push-branch
 
 ### Safety Rules
 
-1. **Never commit to main** - It mirrors upstream
-2. **Never use `--force`** - Always use `--force-with-lease` (scripts do this)
-3. **Sync before branching** - Run `fork-sync-main` before starting new work
-4. **Document customizations** - Update FORK.md when adding features
+1. **NEVER create PRs against upstream (marimo-team/marimo)** - All PRs go to our fork only
+2. **Never commit to main** - It mirrors upstream
+3. **Never use `--force`** - Always use `--force-with-lease` (scripts do this)
+4. **Sync before branching** - Run `fork-sync-main` before starting new work
+5. **Document customizations** - Update FORK.md when adding features
+
+### Creating Pull Requests
+
+Always specify the fork repo explicitly to avoid accidentally targeting upstream:
+
+```bash
+# CORRECT: PR against our fork
+gh pr create --repo try-ama/marimo --base main
+
+# WRONG: Don't use bare `gh pr create` - it may target upstream
+```
 
 ### If Something Goes Wrong
 
