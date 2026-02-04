@@ -17,6 +17,7 @@ from marimo._session.notebook.serializer import (
     NotebookSerializer,
     PythonNotebookSerializer,
 )
+from marimo._session.notebook.s3_storage import S3Storage
 from marimo._session.notebook.storage import (
     FilesystemStorage,
     StorageInterface,
@@ -28,6 +29,7 @@ __all__ = [
     "MarkdownNotebookSerializer",
     "NotebookSerializer",
     "PythonNotebookSerializer",
+    "S3Storage",
     "StorageInterface",
     "load_notebook",
     "new_notebook",
