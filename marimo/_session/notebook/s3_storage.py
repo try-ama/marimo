@@ -73,6 +73,31 @@ class S3Storage:
             )
         return self._client
 
+    def _validate_path(self, path_str: str) -> None:
+        """Validate path doesn't contain traversal or injection attacks.
+
+        Args:
+            path_str: Path string to validate.
+
+        Raises:
+            ValueError: If path contains dangerous sequences.
+        """
+        # Security: Reject path traversal attempts
+        if ".." in path_str:
+            raise ValueError(f"Path traversal not allowed: {path_str}")
+
+        # Security: Reject URL-encoded traversal attempts
+        if "%2e%2e" in path_str.lower() or "%2f" in path_str.lower():
+            raise ValueError(f"URL-encoded path traversal not allowed: {path_str}")
+
+        # Security: Reject Windows-style path separators
+        if "\\" in path_str:
+            raise ValueError(f"Backslashes not allowed in path: {path_str}")
+
+        # Security: Reject null bytes (injection attack)
+        if "\x00" in path_str:
+            raise ValueError(f"Null bytes not allowed in path: {path_str}")
+
     def _make_key(self, path: Path | str) -> str:
         """Convert a path to an S3 key with prefix.
 
@@ -81,8 +106,15 @@ class S3Storage:
 
         Returns:
             Full S3 key (e.g., "notebooks/tenant-123/notebook.py")
+
+        Raises:
+            ValueError: If path contains traversal sequences.
         """
         path_str = str(path).lstrip("/")
+
+        # Security: Validate path before constructing key
+        self._validate_path(path_str)
+
         if self._prefix:
             return f"{self._prefix}/{path_str}"
         return path_str
