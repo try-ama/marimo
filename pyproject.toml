@@ -93,6 +93,11 @@ sandbox = [
     "uv>=0.9.21",              # for sandbox management
 ]
 
+# For S3-based notebook storage
+s3 = [
+    "boto3>=1.34",             # S3 client for object storage
+]
+
 # List of deps that are recommended for most users
 # in order to unlock all features in marimo
 recommended = [
