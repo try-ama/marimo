@@ -1415,6 +1415,32 @@ export const UserConfigForm: React.FC = () => {
                 </div>
               )}
             />
+            <FormField
+              control={form.control}
+              name="experimental.custom_fonts"
+              render={({ field }) => (
+                <div className="flex flex-col gap-y-1">
+                  <FormItem className={formItemClasses}>
+                    <FormLabel className="font-normal">Custom Fonts</FormLabel>
+                    <FormControl>
+                      <Checkbox
+                        data-testid="custom-fonts-checkbox"
+                        checked={field.value === true}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                  <IsOverridden
+                    userConfig={config}
+                    name="experimental.custom_fonts"
+                  />
+                  <FormDescription>
+                    Use custom fonts: Lilex for code and Geist Sans for UI text.
+                    Requires a page refresh to take effect.
+                  </FormDescription>
+                </div>
+              )}
+            />
           </SettingGroup>
         );
     }
