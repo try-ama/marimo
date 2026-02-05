@@ -1,5 +1,6 @@
 /* Copyright 2026 Marimo. All rights reserved. */
 import { memo, type PropsWithChildren, useLayoutEffect } from "react";
+import { useFontLoader } from "@/hooks/useFontLoader";
 import { useTheme } from "./useTheme";
 
 /**
@@ -8,6 +9,8 @@ import { useTheme } from "./useTheme";
 export const ThemeProvider: React.FC<PropsWithChildren> = memo(
   ({ children }) => {
     const { theme } = useTheme();
+    useFontLoader();
+
     useLayoutEffect(() => {
       document.body.classList.add(theme, `${theme}-theme`);
       return () => {

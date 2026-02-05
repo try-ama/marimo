@@ -611,6 +611,7 @@ class ExperimentalConfig(TypedDict, total=False):
     rtc_v2: bool
     performant_table_charts: bool
     chat_modes: bool
+    custom_fonts: bool  # Enable Lilex + Geist Sans fonts
 
     # Internal features
     cache: CacheConfig
