@@ -17,6 +17,7 @@ from marimo._sql.engines.clickhouse import (
     ClickhouseServer,
 )
 from marimo._sql.engines.dbapi import DBAPIEngine
+from marimo._sql.engines.dcp import DCPEngine
 from marimo._sql.engines.duckdb import INTERNAL_DUCKDB_ENGINE, DuckDBEngine
 from marimo._sql.engines.ibis import IbisEngine
 from marimo._sql.engines.pyiceberg import PyIcebergEngine
@@ -33,6 +34,7 @@ LOGGER = _loggers.marimo_logger()
 # TODO: this is O(n) and can be O(1) using similar logic to the
 # formatters, but order does matter here
 SUPPORTED_ENGINES: list[type[BaseEngine[Any]]] = [
+    DCPEngine,
     SQLAlchemyEngine,
     IbisEngine,
     DuckDBEngine,
