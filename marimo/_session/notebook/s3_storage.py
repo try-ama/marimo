@@ -111,7 +111,9 @@ class S3Storage:
         try:
             response = client.get_object(Bucket=self._bucket, Key=key)
             content = response["Body"].read().decode("utf-8")
-            LOGGER.debug(f"Read {len(content)} bytes from s3://{self._bucket}/{key}")
+            LOGGER.debug(
+                f"Read {len(content)} bytes from s3://{self._bucket}/{key}"
+            )
             return content
         except client.exceptions.NoSuchKey as err:
             raise HTTPException(
@@ -145,7 +147,9 @@ class S3Storage:
                 Body=content.encode("utf-8"),
                 ContentType="text/x-python",
             )
-            LOGGER.debug(f"Wrote {len(content)} bytes to s3://{self._bucket}/{key}")
+            LOGGER.debug(
+                f"Wrote {len(content)} bytes to s3://{self._bucket}/{key}"
+            )
         except Exception as err:
             LOGGER.error(f"Failed to write to S3: {err}")
             raise HTTPException(

@@ -8,12 +8,12 @@ from marimo._session.notebook.file_manager import (
     read_css_file,
     read_html_head_file,
 )
+from marimo._session.notebook.s3_storage import S3Storage
 from marimo._session.notebook.serializer import (
     MarkdownNotebookSerializer,
     NotebookSerializer,
     PythonNotebookSerializer,
 )
-from marimo._session.notebook.s3_storage import S3Storage
 from marimo._session.notebook.storage import (
     FilesystemStorage,
     StorageInterface,
