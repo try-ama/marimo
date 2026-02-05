@@ -624,6 +624,7 @@ class ExperimentalConfig(TypedDict, total=False):
     markdown: bool  # Used in playground (community cloud)
     wasm_layouts: bool  # Used in playground (community cloud)
     rtc_v2: bool
+    custom_fonts: bool  # Enable Lilex + Geist Sans fonts
 
     # Internal features
     cache: CacheConfig

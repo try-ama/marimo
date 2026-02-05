@@ -12,6 +12,7 @@ export interface ExperimentalFeatures {
   cache_panel: boolean;
   external_agents: boolean;
   server_side_pdf_export: boolean;
+  custom_fonts: boolean; // Enable Lilex + Geist Sans fonts
   // Add new feature flags here
 }
 
@@ -22,6 +23,7 @@ const defaultValues: ExperimentalFeatures = {
   cache_panel: false,
   external_agents: import.meta.env.DEV,
   server_side_pdf_export: true,
+  custom_fonts: false,
 };
 
 export function getFeatureFlag<T extends keyof ExperimentalFeatures>(
