@@ -12,12 +12,12 @@ from marimo._session.notebook.loader import (
     load_notebook,
     new_notebook,
 )
+from marimo._session.notebook.s3_storage import S3Storage
 from marimo._session.notebook.serializer import (
     MarkdownNotebookSerializer,
     NotebookSerializer,
     PythonNotebookSerializer,
 )
-from marimo._session.notebook.s3_storage import S3Storage
 from marimo._session.notebook.storage import (
     FilesystemStorage,
     StorageInterface,
