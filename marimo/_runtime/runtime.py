@@ -2265,6 +2265,20 @@ class Kernel:
         """
         variable_name = cast(VariableName, variable_name)
 
+        # Check DCP registry first — DCP engines use virtual variable names
+        # that don't exist in user globals.
+        from marimo._sql.dcp_registry import (
+            DCP_ENGINE_PREFIX,
+            DCPRegistry,
+            is_dcp_enabled,
+        )
+
+        if is_dcp_enabled() and variable_name.startswith(DCP_ENGINE_PREFIX):
+            dcp_engine = DCPRegistry.get().get_engine(variable_name)
+            if dcp_engine is not None:
+                return dcp_engine, None
+            return None, "DCP engine not found"
+
         try:
             engine_val = self.globals.get(variable_name)
             engines = get_engines_from_variables([(variable_name, engine_val)])

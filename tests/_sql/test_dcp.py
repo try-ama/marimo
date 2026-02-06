@@ -8,6 +8,11 @@ import pytest
 
 from marimo._data.models import DataSourceConnection
 from marimo._dependencies.dependencies import DependencyManager
+from marimo._sql.dcp_registry import (
+    DCP_ENGINE_PREFIX,
+    DCPRegistry,
+    is_dcp_enabled,
+)
 from marimo._sql.engines.dcp import (
     DCPConnection,
     DCPEngine,
@@ -44,6 +49,12 @@ def dcp_engine(dcp_connection: DCPConnection) -> DCPEngine:
     return DCPEngine(dcp_connection, engine_name=VariableName("sf"))
 
 
+@pytest.fixture(autouse=True)
+def _reset_registry() -> None:
+    """Reset the DCP registry singleton between tests."""
+    DCPRegistry.reset()
+
+
 # ── Helpers ───────────────────────────────────────────────────
 
 
@@ -78,6 +89,38 @@ CONNECTOR_DETAIL = {
         "can_query": True,
         "max_rows_per_query": None,
     },
+}
+
+CONNECTORS_LIST_RESPONSE = {
+    "connectors": [
+        {
+            "id": "uuid-sf-prod",
+            "name": "Snowflake Prod",
+            "type": "snowflake",
+            "status": "active",
+            "connection_info": {
+                "database": "ANALYTICS_DB",
+                "schema": "PUBLIC",
+            },
+        },
+        {
+            "id": "uuid-pg-staging",
+            "name": "Postgres Staging",
+            "type": "postgresql",
+            "status": "active",
+            "connection_info": {
+                "database": "staging_db",
+                "schema": "public",
+            },
+        },
+        {
+            "id": "uuid-inactive",
+            "name": "Old MySQL",
+            "type": "mysql",
+            "status": "inactive",
+            "connection_info": {},
+        },
+    ]
 }
 
 SCHEMAS_RESPONSE = {
@@ -129,17 +172,35 @@ def test_dcp_connection_creation() -> None:
     assert conn.max_rows == 100_000
 
 
-def test_dcp_connection_defaults_from_env() -> None:
+def test_dcp_connection_defaults_from_generic_env() -> None:
+    """MARIMO_DCP_* env vars take priority over AMA_* ones."""
     with patch.dict(
         "os.environ",
         {
-            "AMA_BASE_URL": "http://env-api:9000",
-            "AMA_NOTEBOOK_TOKEN": "env-token",
+            "MARIMO_DCP_BASE_URL": "http://generic:9000",
+            "MARIMO_DCP_TOKEN": "generic-token",
+            "AMA_BASE_URL": "http://ama:8000",
+            "AMA_NOTEBOOK_TOKEN": "ama-token",
         },
     ):
         conn = DCPConnection(connector_id="test")
-        assert conn.base_url == "http://env-api:9000"
-        assert conn.token == "env-token"
+        assert conn.base_url == "http://generic:9000"
+        assert conn.token == "generic-token"
+
+
+def test_dcp_connection_defaults_from_ama_env() -> None:
+    """Falls back to AMA_* env vars when MARIMO_DCP_* not set."""
+    with patch.dict(
+        "os.environ",
+        {
+            "AMA_BASE_URL": "http://ama:9000",
+            "AMA_NOTEBOOK_TOKEN": "ama-token",
+        },
+        clear=True,
+    ):
+        conn = DCPConnection(connector_id="test")
+        assert conn.base_url == "http://ama:9000"
+        assert conn.token == "ama-token"
 
 
 def test_dcp_connection_defaults_without_env() -> None:
@@ -591,33 +652,209 @@ def test_execute_never_cached(
     assert mock_request.call_count == 2
 
 
-# ── Engine registration tests ────────────────────────────────
+# ── DCP Registry tests ───────────────────────────────────────
 
 
-def test_get_engines_from_variables_dcp() -> None:
-    conn = DCPConnection(
-        connector_id="test",
-        base_url="http://test:8000",
-        token="tok",
-    )
-    variables: list[tuple[str, object]] = [("sf", conn)]
-
-    engines = get_engines_from_variables(variables)
-    assert len(engines) == 1
-    var_name, engine = engines[0]
-    assert var_name == "sf"
-    assert isinstance(engine, DCPEngine)
+def test_is_dcp_enabled_without_env() -> None:
+    with patch.dict("os.environ", {}, clear=True):
+        assert is_dcp_enabled() is False
 
 
-def test_get_engines_dcp_does_not_match_other_types() -> None:
-    variables: list[tuple[str, object]] = [
-        ("a_string", "not a connection"),
-        ("a_number", 42),
-        ("a_dict", {"connector_id": "test"}),
-    ]
+def test_is_dcp_enabled_with_generic_env() -> None:
+    """MARIMO_DCP_TOKEN enables DCP."""
+    with patch.dict("os.environ", {"MARIMO_DCP_TOKEN": "tok"}, clear=True):
+        assert is_dcp_enabled() is True
 
-    engines = get_engines_from_variables(variables)
+
+def test_is_dcp_enabled_with_ama_env() -> None:
+    """AMA_NOTEBOOK_TOKEN also enables DCP (fallback)."""
+    with patch.dict("os.environ", {"AMA_NOTEBOOK_TOKEN": "tok"}, clear=True):
+        assert is_dcp_enabled() is True
+
+
+@patch("httpx.get")
+def test_registry_auto_discovers_connectors(mock_get: MagicMock) -> None:
+    mock_get.return_value = _make_response(json_data=CONNECTORS_LIST_RESPONSE)
+
+    with patch.dict(
+        "os.environ",
+        {"MARIMO_DCP_TOKEN": "tok", "MARIMO_DCP_BASE_URL": "http://api:8000"},
+    ):
+        registry = DCPRegistry()
+        engines = registry.get_engines()
+
+    # Should discover 2 active connectors (not the inactive one)
+    assert len(engines) == 2
+
+    names = list(engines.keys())
+    assert all(n.startswith(DCP_ENGINE_PREFIX) for n in names)
+
+    # Verify engines are DCPEngine instances
+    for engine in engines.values():
+        assert isinstance(engine, DCPEngine)
+
+
+@patch("httpx.get")
+def test_registry_uses_ama_env_fallback(mock_get: MagicMock) -> None:
+    """Registry falls back to AMA_* env vars when MARIMO_DCP_* not set."""
+    mock_get.return_value = _make_response(json_data=CONNECTORS_LIST_RESPONSE)
+
+    with patch.dict(
+        "os.environ",
+        {"AMA_NOTEBOOK_TOKEN": "tok", "AMA_BASE_URL": "http://ama:8000"},
+        clear=True,
+    ):
+        registry = DCPRegistry()
+        engines = registry.get_engines()
+
+    assert len(engines) == 2
+    # Verify base URL was resolved from AMA_BASE_URL
+    first_engine = list(engines.values())[0]
+    assert first_engine._connection.base_url == "http://ama:8000"
+
+
+@patch("httpx.get")
+def test_registry_skips_inactive_connectors(mock_get: MagicMock) -> None:
+    mock_get.return_value = _make_response(json_data=CONNECTORS_LIST_RESPONSE)
+
+    with patch.dict(
+        "os.environ",
+        {"MARIMO_DCP_TOKEN": "tok", "MARIMO_DCP_BASE_URL": "http://api:8000"},
+    ):
+        registry = DCPRegistry()
+        engines = registry.get_engines()
+
+    # The "Old MySQL" connector has status=inactive, should be excluded
+    engine_ids = [e._connection.connector_id for e in engines.values()]
+    assert "uuid-inactive" not in engine_ids
+    assert "uuid-sf-prod" in engine_ids
+    assert "uuid-pg-staging" in engine_ids
+
+
+@patch("httpx.get")
+def test_registry_pre_populates_connector_detail_cache(
+    mock_get: MagicMock,
+) -> None:
+    mock_get.return_value = _make_response(json_data=CONNECTORS_LIST_RESPONSE)
+
+    with patch.dict(
+        "os.environ",
+        {"MARIMO_DCP_TOKEN": "tok", "MARIMO_DCP_BASE_URL": "http://api:8000"},
+    ):
+        registry = DCPRegistry()
+        engines = registry.get_engines()
+
+    # Each engine should have its connector detail pre-cached
+    for engine in engines.values():
+        assert engine._connector_detail_cache is not None
+
+
+def test_registry_returns_empty_when_dcp_disabled() -> None:
+    with patch.dict("os.environ", {}, clear=True):
+        registry = DCPRegistry()
+        engines = registry.get_engines()
+
     assert len(engines) == 0
+
+
+@patch("httpx.get")
+def test_registry_caches_results(mock_get: MagicMock) -> None:
+    mock_get.return_value = _make_response(json_data=CONNECTORS_LIST_RESPONSE)
+
+    with patch.dict(
+        "os.environ",
+        {"MARIMO_DCP_TOKEN": "tok", "MARIMO_DCP_BASE_URL": "http://api:8000"},
+    ):
+        registry = DCPRegistry()
+        engines1 = registry.get_engines()
+        engines2 = registry.get_engines()
+
+    # Same instance — cached
+    assert engines1 is engines2
+    # Only one HTTP call
+    assert mock_get.call_count == 1
+
+
+@patch("httpx.get")
+def test_registry_get_engine_by_name(mock_get: MagicMock) -> None:
+    mock_get.return_value = _make_response(json_data=CONNECTORS_LIST_RESPONSE)
+
+    with patch.dict(
+        "os.environ",
+        {"MARIMO_DCP_TOKEN": "tok", "MARIMO_DCP_BASE_URL": "http://api:8000"},
+    ):
+        registry = DCPRegistry()
+        engines = registry.get_engines()
+
+    name = list(engines.keys())[0]
+    engine = registry.get_engine(name)
+    assert engine is engines[name]
+
+    # Non-existent name returns None
+    assert registry.get_engine(VariableName("nonexistent")) is None
+
+
+@patch("httpx.get")
+def test_registry_handles_api_error_gracefully(
+    mock_get: MagicMock,
+) -> None:
+    mock_get.return_value = _make_response(
+        status_code=500, text="Server Error"
+    )
+
+    with patch.dict(
+        "os.environ",
+        {"MARIMO_DCP_TOKEN": "tok", "MARIMO_DCP_BASE_URL": "http://api:8000"},
+    ):
+        registry = DCPRegistry()
+        engines = registry.get_engines()
+
+    # Should return empty dict, not crash
+    assert len(engines) == 0
+
+
+@patch("httpx.get")
+def test_registry_handles_network_error_gracefully(
+    mock_get: MagicMock,
+) -> None:
+    mock_get.side_effect = Exception("Connection refused")
+
+    with patch.dict(
+        "os.environ",
+        {"MARIMO_DCP_TOKEN": "tok", "MARIMO_DCP_BASE_URL": "http://api:8000"},
+    ):
+        registry = DCPRegistry()
+        engines = registry.get_engines()
+
+    assert len(engines) == 0
+
+
+# ── DCP is additive (does not suppress other engines) ─────────
+
+
+def test_dcp_does_not_block_other_engines() -> None:
+    """When DCP is enabled, get_engines_from_variables still works normally."""
+    with patch.dict("os.environ", {"MARIMO_DCP_TOKEN": "tok"}):
+        variables: list[tuple[str, object]] = [
+            ("a_string", "not a connection"),
+            ("a_number", 42),
+        ]
+        engines = get_engines_from_variables(variables)
+        # No matching engines for these types, but the function ran (not blocked)
+        assert len(engines) == 0
+
+
+def test_engines_work_without_dcp() -> None:
+    """When DCP is not enabled, get_engines_from_variables works normally."""
+    with patch.dict("os.environ", {}, clear=True):
+        variables: list[tuple[str, object]] = [
+            ("a_string", "not a connection"),
+        ]
+        engines = get_engines_from_variables(variables)
+        assert len(engines) == 0
+
+
+# ── engine_to_data_source_connection still works ──────────────
 
 
 @patch("httpx.request")
@@ -640,15 +877,17 @@ def test_engine_to_data_source_connection_dcp(
         base_url="http://test:8000",
         token="tok",
     )
-    engine = DCPEngine(conn, engine_name=VariableName("sf"))
+    engine = DCPEngine(conn, engine_name=VariableName("__dcp_Snowflake_Prod"))
 
-    connection = engine_to_data_source_connection(VariableName("sf"), engine)
+    connection = engine_to_data_source_connection(
+        VariableName("__dcp_Snowflake_Prod"), engine
+    )
 
     assert isinstance(connection, DataSourceConnection)
     assert connection.source == "dcp"
     assert connection.dialect == "snowflake"
-    assert connection.name == "sf"
-    assert connection.display_name == "snowflake (sf)"
+    assert connection.name == "__dcp_Snowflake_Prod"
+    assert connection.display_name == "snowflake (__dcp_Snowflake_Prod)"
     assert connection.default_database == "ANALYTICS_DB"
     assert connection.default_schema == "PUBLIC"
 

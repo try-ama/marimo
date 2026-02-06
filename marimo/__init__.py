@@ -77,7 +77,6 @@ __all__ = [  # noqa: RUF022
     "show_code",
     "sidebar",
     "sql",
-    "DCPConnection",
     "stat",
     "state",
     "status",
@@ -150,6 +149,5 @@ from marimo._runtime.state import state
 from marimo._runtime.threads import Thread, current_thread
 from marimo._save.save import cache, lru_cache, persistent_cache
 from marimo._server.asgi import create_asgi_app
-from marimo._sql.engines.dcp import DCPConnection
 from marimo._sql.sql import sql
 from marimo._version import __version__
