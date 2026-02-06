@@ -14,6 +14,7 @@ import {
   type ConnectionName,
   DUCKDB_ENGINE,
   INTERNAL_SQL_ENGINES,
+  isDCPEngine,
 } from "./engines";
 import { datasetTablesAtom } from "./state";
 
@@ -99,6 +100,11 @@ const {
     const newMap = new Map(
       [...connectionsMap].filter(([name]) => {
         if (INTERNAL_SQL_ENGINES.has(name)) {
+          return true;
+        }
+        // DCP engines use virtual variable names (__dcp_*) that don't exist
+        // as real Python variables, so they must be preserved unconditionally.
+        if (isDCPEngine(name)) {
           return true;
         }
         return names.has(name as unknown as VariableName);

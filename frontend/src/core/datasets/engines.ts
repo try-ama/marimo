@@ -9,3 +9,12 @@ export type ConnectionName = TypedString<"ConnectionName">;
 export const DUCKDB_ENGINE = "__marimo_duckdb" as ConnectionName;
 export const INTERNAL_SQL_ENGINES = new Set([DUCKDB_ENGINE]);
 export const DEFAULT_DUCKDB_DATABASE = "memory";
+
+// DCP (Data Connection Platform) engines use virtual variable names
+// that don't exist as real Python variables.
+// Keep this prefix in sync with DCP_ENGINE_PREFIX in marimo/_sql/dcp_registry.py
+export const DCP_ENGINE_PREFIX = "__dcp_";
+
+export function isDCPEngine(name: string): boolean {
+  return name.startsWith(DCP_ENGINE_PREFIX);
+}

@@ -15,16 +15,18 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { maybeAddMarimoImport } from "@/core/cells/add-missing-import";
 import { cellIdsAtom, useCellActions } from "@/core/cells/cells";
 import { useLastFocusedCellId } from "@/core/cells/focus";
-import { autoInstantiateAtom } from "@/core/config/config";
+import { autoInstantiateAtom, dcpConfigEnabledAtom } from "@/core/config/config";
 import {
   dataConnectionsMapAtom,
   type SQLTableContext,
   useDataSourceActions,
 } from "@/core/datasets/data-source-connections";
 import {
+  DCP_ENGINE_PREFIX,
   DEFAULT_DUCKDB_DATABASE,
   DUCKDB_ENGINE,
   INTERNAL_SQL_ENGINES,
+  isDCPEngine,
 } from "@/core/datasets/engines";
 import {
   PreviewSQLTable,
@@ -147,25 +149,59 @@ export const connectionsAtom = atom((get) => {
   );
 });
 
+/**
+ * DCP is considered active when:
+ * - Config explicitly enables it (dcp_enabled: true)
+ * - Config doesn't mention it but DCP connections exist (auto-detect)
+ * When dcp_enabled is explicitly false, DCP is never active.
+ */
+const dcpActiveAtom = atom((get) => {
+  const configEnabled = get(dcpConfigEnabledAtom);
+  if (configEnabled === true) {
+    return true;
+  }
+  if (configEnabled === false) {
+    return false;
+  }
+  // Auto-detect: check if any DCP connections exist
+  const connections = get(dataConnectionsMapAtom);
+  return [...connections.keys()].some((name) => isDCPEngine(name));
+});
+
+/**
+ * Format a DCP engine name for display.
+ * Transforms "__dcp_Snowflake_Prod" -> "Snowflake Prod"
+ */
+function formatDCPEngineName(name: string): string {
+  return name.slice(DCP_ENGINE_PREFIX.length).replaceAll("_", " ");
+}
+
 export const DataSources: React.FC = () => {
   const [searchValue, setSearchValue] = React.useState<string>("");
 
   const closeAllColumns = useSetAtom(closeAllColumnsAtom);
   const tables = useAtomValue(sortedTablesAtom);
   const dataConnections = useAtomValue(connectionsAtom);
+  const dcpActive = useAtomValue(dcpActiveAtom);
 
   if (tables.length === 0 && dataConnections.length === 0) {
     return (
       <PanelEmptyState
         title="No tables found"
-        description="Any datasets/dataframes in the global scope will be shown here."
+        description={
+          dcpActive
+            ? "Waiting for DCP connections to be discovered."
+            : "Any datasets/dataframes in the global scope will be shown here."
+        }
         action={
-          <AddDatabaseDialog>
-            <Button variant="outline" size="sm">
-              Add database or catalog
-              <PlusIcon className="h-4 w-4 ml-2" />
-            </Button>
-          </AddDatabaseDialog>
+          dcpActive ? undefined : (
+            <AddDatabaseDialog>
+              <Button variant="outline" size="sm">
+                Add database or catalog
+                <PlusIcon className="h-4 w-4 ml-2" />
+              </Button>
+            </AddDatabaseDialog>
+          )
         }
         icon={<DatabaseIcon />}
       />
@@ -201,15 +237,17 @@ export const DataSources: React.FC = () => {
           </button>
         )}
 
-        <AddDatabaseDialog>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="px-2 rounded-none focus-visible:outline-hidden"
-          >
-            <PlusIcon className="h-4 w-4" />
-          </Button>
-        </AddDatabaseDialog>
+        {!dcpActive && (
+          <AddDatabaseDialog>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="px-2 rounded-none focus-visible:outline-hidden"
+            >
+              <PlusIcon className="h-4 w-4" />
+            </Button>
+          </AddDatabaseDialog>
+        )}
       </div>
 
       <CommandList className="flex flex-col">
@@ -262,7 +300,12 @@ const Engine: React.FC<{
 }> = ({ connection, children, hasChildren }) => {
   // The internal duckdb connection is updated automatically, so we do not need to refresh.
   const internalEngine = connection.name === DUCKDB_ENGINE;
-  const engineName = internalEngine ? "In-Memory" : connection.name;
+  const dcpEngine = isDCPEngine(connection.name);
+  const engineDisplayName = internalEngine
+    ? "In-Memory"
+    : dcpEngine
+      ? formatDCPEngineName(connection.name)
+      : connection.name;
   const { previewDataSourceConnection } = useRequestClient();
 
   const [isSpinning, setIsSpinning] = React.useState(false);
@@ -285,7 +328,11 @@ const Engine: React.FC<{
         />
         <span className="text-xs">{dbDisplayName(connection.dialect)}</span>
         <span className="text-xs text-muted-foreground">
-          (<EngineVariable variableName={engineName as VariableName} />)
+          ({dcpEngine ? (
+            <span className="text-link opacity-80">{engineDisplayName}</span>
+          ) : (
+            <EngineVariable variableName={engineDisplayName as VariableName} />
+          )})
         </span>
         {!internalEngine && (
           <Tooltip content="Refresh connection">
