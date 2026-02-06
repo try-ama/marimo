@@ -48,10 +48,19 @@ SUPPORTED_ENGINES: list[type[BaseEngine[Any]]] = [
 def get_engines_from_variables(
     variables: list[tuple[VariableName, object]],
 ) -> list[tuple[VariableName, BaseEngine[Any]]]:
+    from marimo._sql.dcp_registry import is_dcp_enabled
+
+    # When DCP is enabled, only DuckDB is allowed alongside DCP engines.
+    # Other built-in engines are suppressed so users connect through
+    # pre-configured DCP data sources for everything except local work.
+    allowed_engines: list[type[BaseEngine[Any]]] = SUPPORTED_ENGINES
+    if is_dcp_enabled():
+        allowed_engines = [DuckDBEngine]
+
     engines: list[tuple[VariableName, BaseEngine[Any]]] = []
 
     for variable_name, value in variables:
-        for sql_engine in SUPPORTED_ENGINES:
+        for sql_engine in allowed_engines:
             if sql_engine.is_compatible(value):
                 engines.append(
                     (
