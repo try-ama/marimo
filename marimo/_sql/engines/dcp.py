@@ -40,28 +40,34 @@ _CONNECTOR_TYPE_TO_DIALECT: dict[str, str] = {
 }
 
 
+def _resolve_base_url() -> str:
+    return os.environ.get(
+        "MARIMO_DCP_BASE_URL",
+        os.environ.get("AMA_BASE_URL", "http://localhost:8000"),
+    )
+
+
+def _resolve_token() -> str:
+    return os.environ.get(
+        "MARIMO_DCP_TOKEN",
+        os.environ.get("AMA_NOTEBOOK_TOKEN", ""),
+    )
+
+
 @dataclass
 class DCPConnection:
-    """Connection to an Ama data source via DCP.
+    """Connection to a data source via the Data Connector Protocol (DCP).
 
-    Users create this in a notebook cell:
-        dcp = DCPConnection(connector_id="snowflake-prod")
-    or:
-        dcp = DCPConnection(connector_id="<uuid>")
+    Typically created automatically by the DCP registry during auto-discovery.
+    Configuration is resolved from environment variables:
 
-    The engine auto-discovers it and populates the data sources panel.
+        MARIMO_DCP_BASE_URL (or AMA_BASE_URL)   — DCP server URL
+        MARIMO_DCP_TOKEN    (or AMA_NOTEBOOK_TOKEN) — Bearer token
     """
 
     connector_id: str
-    base_url: str = field(
-        default_factory=lambda: os.environ.get(
-            "AMA_BASE_URL", "http://localhost:8000"
-        )
-    )
-    token: str = field(
-        default_factory=lambda: os.environ.get("AMA_NOTEBOOK_TOKEN", ""),
-        repr=False,
-    )
+    base_url: str = field(default_factory=_resolve_base_url)
+    token: str = field(default_factory=_resolve_token, repr=False)
     timeout_seconds: int = 300
     max_rows: int = 100_000
 
@@ -131,7 +137,7 @@ class _CacheEntry:
 
 
 class DCPEngine(SQLConnection[DCPConnection]):
-    """Marimo SQL engine backed by Ama's Data Connector Protocol."""
+    """Marimo SQL engine backed by the Data Connector Protocol (DCP)."""
 
     def __init__(
         self,

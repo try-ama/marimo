@@ -180,6 +180,19 @@ def _broadcast_data_source_connection(
         return
 
     del run_result
+
+    from marimo._sql.dcp_registry import DCPRegistry, is_dcp_enabled
+
+    # Broadcast auto-discovered DCP engines if DCP is configured.
+    if is_dcp_enabled():
+        dcp_connections = DCPRegistry.get().get_connections()
+        if dcp_connections:
+            LOGGER.debug("Broadcasting DCP data source connections")
+            broadcast_notification(
+                DataSourceConnectionsNotification(connections=dcp_connections)
+            )
+
+    # Also broadcast any user-defined SQL engines found in cell variables.
     engines = get_engines_from_variables(
         [
             (VariableName(variable), runner.glbls[variable])
@@ -213,6 +226,7 @@ def _broadcast_duckdb_datasource(
 
     del run_result
     del runner
+
     if not DependencyManager.duckdb.has():
         return
 
