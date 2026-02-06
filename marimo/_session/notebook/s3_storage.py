@@ -4,13 +4,15 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import Any, Optional
 
 from marimo import _loggers
 from marimo._utils.http import HTTPException, HTTPStatus
 
-if TYPE_CHECKING:
-    from mypy_boto3_s3 import S3Client
+try:
+    from mypy_boto3_s3 import S3Client  # type: ignore[import-not-found]
+except ImportError:
+    S3Client = Any
 
 LOGGER = _loggers.marimo_logger()
 
@@ -59,7 +61,7 @@ class S3Storage:
         """Get or create S3 client (lazy initialization)."""
         if self._client is None:
             try:
-                import boto3
+                import boto3  # type: ignore[import-untyped]
             except ImportError as err:
                 raise ImportError(
                     "boto3 is required for S3 storage. "
@@ -110,7 +112,7 @@ class S3Storage:
 
         try:
             response = client.get_object(Bucket=self._bucket, Key=key)
-            content = response["Body"].read().decode("utf-8")
+            content: str = response["Body"].read().decode("utf-8")
             LOGGER.debug(
                 f"Read {len(content)} bytes from s3://{self._bucket}/{key}"
             )
@@ -299,7 +301,7 @@ class S3Storage:
             full_path = relative_path
 
         # Normalize path (handle .. and .)
-        parts = []
+        parts: list[str] = []
         for part in full_path.split("/"):
             if part == "..":
                 if parts:
