@@ -9,7 +9,12 @@ import {
   exportedForTesting,
   type SQLTableContext,
 } from "../data-source-connections";
-import { type ConnectionName, INTERNAL_SQL_ENGINES } from "../engines";
+import {
+  type ConnectionName,
+  DCP_ENGINE_PREFIX,
+  INTERNAL_SQL_ENGINES,
+  isDCPEngine,
+} from "../engines";
 
 const { reducer, initialState } = exportedForTesting;
 
@@ -573,5 +578,118 @@ describe("add table", () => {
     const conn1 = newState.connectionsMap.get("conn1" as ConnectionName);
     const db1 = conn1?.databases.find((db) => db.name === "db1");
     expect(db1?.schemas.length).toBe(1);
+  });
+});
+
+describe("isDCPEngine", () => {
+  it("identifies DCP engine names", () => {
+    expect(isDCPEngine(`${DCP_ENGINE_PREFIX}Snowflake_Prod`)).toBe(true);
+    expect(isDCPEngine(`${DCP_ENGINE_PREFIX}BigQuery`)).toBe(true);
+    expect(isDCPEngine("__dcp_")).toBe(true);
+  });
+
+  it("rejects non-DCP engine names", () => {
+    expect(isDCPEngine("conn1")).toBe(false);
+    expect(isDCPEngine("__marimo_duckdb")).toBe(false);
+    expect(isDCPEngine("dcp_connection")).toBe(false);
+    expect(isDCPEngine("")).toBe(false);
+  });
+});
+
+describe("filtering data sources with DCP connections", () => {
+  function filterDataSources(
+    state: DataSourceState,
+    payload: VariableName[],
+  ) {
+    return reducer(state, {
+      type: "filterDataSourcesFromVariables",
+      payload: payload,
+    });
+  }
+
+  it("preserves DCP connections when no variables match", () => {
+    const dcpConnection: DataSourceConnection = {
+      name: `${DCP_ENGINE_PREFIX}Snowflake_Prod` as ConnectionName,
+      source: "snowflake",
+      display_name: "Snowflake Prod",
+      dialect: "snowflake",
+      databases: [],
+    };
+
+    let state = initialState();
+    state = addConnection([dcpConnection], state);
+    expect(state.connectionsMap.size).toBe(defaultConnSize + 1);
+
+    // Filter with empty variables - DCP connections should survive
+    const filtered = filterDataSources(state, []);
+    expect(filtered.connectionsMap.size).toBe(defaultConnSize + 1);
+    expect(
+      filtered.connectionsMap.has(dcpConnection.name),
+    ).toBe(true);
+  });
+
+  it("preserves DCP connections alongside variable-matched connections", () => {
+    const dcpConnection: DataSourceConnection = {
+      name: `${DCP_ENGINE_PREFIX}BigQuery` as ConnectionName,
+      source: "bigquery",
+      display_name: "BigQuery",
+      dialect: "bigquery",
+      databases: [],
+    };
+    const userConnection: DataSourceConnection = {
+      name: "my_pg" as ConnectionName,
+      source: "postgres",
+      display_name: "Postgres",
+      dialect: "postgres",
+      databases: [],
+    };
+
+    let state = initialState();
+    state = addConnection([dcpConnection, userConnection], state);
+    expect(state.connectionsMap.size).toBe(defaultConnSize + 2);
+
+    // Filter with only the user connection variable
+    const filtered = filterDataSources(state, [
+      "my_pg" as unknown as VariableName,
+    ]);
+    // Should keep: internal engines + DCP + variable-matched
+    expect(filtered.connectionsMap.size).toBe(defaultConnSize + 2);
+    expect(
+      filtered.connectionsMap.has(dcpConnection.name),
+    ).toBe(true);
+    expect(
+      filtered.connectionsMap.has("my_pg" as ConnectionName),
+    ).toBe(true);
+  });
+
+  it("removes non-DCP, non-internal connections without matching variables", () => {
+    const dcpConnection: DataSourceConnection = {
+      name: `${DCP_ENGINE_PREFIX}Snowflake` as ConnectionName,
+      source: "snowflake",
+      display_name: "Snowflake",
+      dialect: "snowflake",
+      databases: [],
+    };
+    const orphanedConnection: DataSourceConnection = {
+      name: "old_conn" as ConnectionName,
+      source: "mysql",
+      display_name: "MySQL",
+      dialect: "mysql",
+      databases: [],
+    };
+
+    let state = initialState();
+    state = addConnection([dcpConnection, orphanedConnection], state);
+    expect(state.connectionsMap.size).toBe(defaultConnSize + 2);
+
+    // Filter with no variables - orphaned should be removed, DCP preserved
+    const filtered = filterDataSources(state, []);
+    expect(filtered.connectionsMap.size).toBe(defaultConnSize + 1);
+    expect(
+      filtered.connectionsMap.has(dcpConnection.name),
+    ).toBe(true);
+    expect(
+      filtered.connectionsMap.has("old_conn" as ConnectionName),
+    ).toBe(false);
   });
 });
