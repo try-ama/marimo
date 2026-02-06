@@ -1,10 +1,20 @@
 # Copyright 2026 Marimo. All rights reserved.
 """DCP (Data Connector Protocol) registry.
 
-When configured (via MARIMO_DCP_BASE_URL + MARIMO_DCP_TOKEN env vars, or the
-AMA_BASE_URL + AMA_NOTEBOOK_TOKEN aliases), this module auto-discovers all
-available DCP connectors and surfaces them as additional SQL engines alongside
-Marimo's built-in engines (DuckDB, SQLAlchemy, etc.).
+DCP can be enabled via marimo config or environment variables:
+
+    Config (marimo.toml / pyproject.toml):
+        [tool.marimo.datasources]
+        dcp_enabled = true
+        dcp_base_url = "http://my-server:8000"
+
+    Environment variables (fallback):
+        MARIMO_DCP_TOKEN / AMA_NOTEBOOK_TOKEN  — Bearer token (required)
+        MARIMO_DCP_BASE_URL / AMA_BASE_URL     — Server URL
+
+When enabled, DCP auto-discovers connectors and surfaces them as SQL engines
+alongside DuckDB.  Other built-in engines are suppressed so users connect
+through pre-configured DCP data sources for everything except local work.
 """
 
 from __future__ import annotations
@@ -13,6 +23,7 @@ import os
 from typing import Any, Optional
 
 from marimo import _loggers
+from marimo._config.config import DatasourcesConfig
 from marimo._data.models import DataSourceConnection
 from marimo._sql.engines.dcp import DCPConnection, DCPEngine
 from marimo._sql.engines.types import BaseEngine
@@ -25,11 +36,51 @@ LOGGER = _loggers.marimo_logger()
 DCP_ENGINE_PREFIX = "__dcp_"
 
 
-def _get_dcp_base_url() -> str:
-    """Resolve DCP base URL from environment.
+# ── Config helpers ────────────────────────────────────────────
 
-    Checks MARIMO_DCP_BASE_URL first, falls back to AMA_BASE_URL.
+
+def _get_datasources_config() -> DatasourcesConfig:
+    """Read the [datasources] section from marimo config.
+
+    Returns an empty dict if the context is not yet initialised or the
+    key is missing — callers should treat missing keys as "not configured".
     """
+    try:
+        from marimo._runtime.context.types import (
+            ContextNotInitializedError,
+            get_context,
+        )
+
+        return get_context().marimo_config.get("datasources", {})
+    except ContextNotInitializedError:
+        pass
+    except Exception:
+        pass
+
+    try:
+        from marimo._config.manager import get_default_config_manager
+
+        return (
+            get_default_config_manager(current_path=None)
+            .get_config()
+            .get("datasources", {})
+        )
+    except Exception:
+        pass
+
+    return {}
+
+
+def _get_dcp_base_url() -> str:
+    """Resolve DCP base URL.
+
+    Priority: config → MARIMO_DCP_BASE_URL → AMA_BASE_URL → default.
+    """
+    cfg = _get_datasources_config()
+    config_url: Optional[str] = cfg.get("dcp_base_url")
+    if config_url:
+        return config_url
+
     return os.environ.get(
         "MARIMO_DCP_BASE_URL",
         os.environ.get("AMA_BASE_URL", "http://localhost:8000"),
@@ -39,6 +90,7 @@ def _get_dcp_base_url() -> str:
 def _get_dcp_token() -> str:
     """Resolve DCP token from environment.
 
+    Tokens are secrets and are only read from env vars, never config files.
     Checks MARIMO_DCP_TOKEN first, falls back to AMA_NOTEBOOK_TOKEN.
     """
     return os.environ.get(
@@ -50,10 +102,20 @@ def _get_dcp_token() -> str:
 def is_dcp_enabled() -> bool:
     """Check if DCP mode is active.
 
-    DCP is enabled when a DCP token is available via MARIMO_DCP_TOKEN or
-    AMA_NOTEBOOK_TOKEN environment variables.
+    Resolution order:
+      1. ``datasources.dcp_enabled`` in marimo config (explicit toggle)
+      2. Presence of a DCP token env var (auto-detect)
     """
+    cfg = _get_datasources_config()
+    explicit: Optional[bool] = cfg.get("dcp_enabled")
+    if explicit is not None:
+        return explicit
+
+    # Auto-detect: enabled if a token is available
     return bool(_get_dcp_token())
+
+
+# ── Engine name helpers ───────────────────────────────────────
 
 
 def _make_engine_name(connector: dict[str, Any]) -> VariableName:
@@ -62,6 +124,9 @@ def _make_engine_name(connector: dict[str, Any]) -> VariableName:
     # Sanitize: replace non-alphanumeric with underscore
     sanitized = "".join(c if c.isalnum() or c == "_" else "_" for c in name)
     return VariableName(f"{DCP_ENGINE_PREFIX}{sanitized}")
+
+
+# ── Registry ──────────────────────────────────────────────────
 
 
 class DCPRegistry:

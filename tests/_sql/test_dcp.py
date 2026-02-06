@@ -672,6 +672,62 @@ def test_is_dcp_enabled_with_ama_env() -> None:
         assert is_dcp_enabled() is True
 
 
+def test_is_dcp_enabled_via_config() -> None:
+    """dcp_enabled=true in config enables DCP even without env token."""
+    with (
+        patch(
+            "marimo._sql.dcp_registry._get_datasources_config",
+            return_value={"dcp_enabled": True},
+        ),
+        patch.dict("os.environ", {}, clear=True),
+    ):
+        assert is_dcp_enabled() is True
+
+
+def test_config_false_overrides_env_token() -> None:
+    """dcp_enabled=false in config disables DCP even with env token."""
+    with (
+        patch(
+            "marimo._sql.dcp_registry._get_datasources_config",
+            return_value={"dcp_enabled": False},
+        ),
+        patch.dict("os.environ", {"MARIMO_DCP_TOKEN": "tok"}),
+    ):
+        assert is_dcp_enabled() is False
+
+
+def test_base_url_from_config() -> None:
+    """dcp_base_url in config takes priority over env vars."""
+    from marimo._sql.dcp_registry import _get_dcp_base_url
+
+    with (
+        patch(
+            "marimo._sql.dcp_registry._get_datasources_config",
+            return_value={"dcp_base_url": "http://config-server:9000"},
+        ),
+        patch.dict("os.environ", {"MARIMO_DCP_BASE_URL": "http://env:8000"}),
+    ):
+        assert _get_dcp_base_url() == "http://config-server:9000"
+
+
+def test_base_url_falls_back_to_env() -> None:
+    """Without config, base URL falls back to env vars."""
+    from marimo._sql.dcp_registry import _get_dcp_base_url
+
+    with (
+        patch(
+            "marimo._sql.dcp_registry._get_datasources_config",
+            return_value={},
+        ),
+        patch.dict(
+            "os.environ",
+            {"MARIMO_DCP_BASE_URL": "http://env:8000"},
+            clear=True,
+        ),
+    ):
+        assert _get_dcp_base_url() == "http://env:8000"
+
+
 @patch("httpx.get")
 def test_registry_auto_discovers_connectors(mock_get: MagicMock) -> None:
     mock_get.return_value = _make_response(json_data=CONNECTORS_LIST_RESPONSE)
