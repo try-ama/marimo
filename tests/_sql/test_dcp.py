@@ -829,23 +829,37 @@ def test_registry_handles_network_error_gracefully(
     assert len(engines) == 0
 
 
-# ── DCP is additive (does not suppress other engines) ─────────
+# ── DCP suppresses non-DuckDB engines ─────────────────────────
 
 
-def test_dcp_does_not_block_other_engines() -> None:
-    """When DCP is enabled, get_engines_from_variables still works normally."""
+def test_dcp_allows_duckdb_engines() -> None:
+    """When DCP is enabled, DuckDB engines are still discovered."""
+    import duckdb
+
+    with patch.dict("os.environ", {"MARIMO_DCP_TOKEN": "tok"}):
+        conn = duckdb.connect()
+        variables: list[tuple[str, object]] = [
+            ("my_db", conn),
+        ]
+        engines = get_engines_from_variables(variables)
+        assert len(engines) == 1
+        assert engines[0][0] == "my_db"
+        conn.close()
+
+
+def test_dcp_suppresses_non_duckdb_engines() -> None:
+    """When DCP is enabled, non-DuckDB engines are not discovered."""
     with patch.dict("os.environ", {"MARIMO_DCP_TOKEN": "tok"}):
         variables: list[tuple[str, object]] = [
             ("a_string", "not a connection"),
             ("a_number", 42),
         ]
         engines = get_engines_from_variables(variables)
-        # No matching engines for these types, but the function ran (not blocked)
         assert len(engines) == 0
 
 
-def test_engines_work_without_dcp() -> None:
-    """When DCP is not enabled, get_engines_from_variables works normally."""
+def test_all_engines_work_without_dcp() -> None:
+    """When DCP is not enabled, all engine types are available."""
     with patch.dict("os.environ", {}, clear=True):
         variables: list[tuple[str, object]] = [
             ("a_string", "not a connection"),
