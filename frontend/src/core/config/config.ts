@@ -145,3 +145,7 @@ export const snippetsEnabledAtom = atom<boolean>((get) => {
 export const disableFileDownloadsAtom = atom<boolean>((get) => {
   return get(resolvedMarimoConfigAtom).server?.disable_file_downloads ?? false;
 });
+
+export const dcpConfigEnabledAtom = atom<boolean | undefined>((get) => {
+  return get(resolvedMarimoConfigAtom).datasources?.dcp_enabled;
+});
