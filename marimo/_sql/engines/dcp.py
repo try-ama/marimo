@@ -224,8 +224,6 @@ class DCPEngine(SQLConnection[DCPConnection]):
 
     def execute(self, query: str) -> Any:
         """Execute SQL via DCP and return a DataFrame."""
-        import pyarrow.ipc as ipc
-
         response = self._request(
             "POST",
             f"/dcp/v1/connectors/{self._connection.connector_id}/query",
@@ -235,6 +233,8 @@ class DCPEngine(SQLConnection[DCPConnection]):
                 "max_rows": self._connection.max_rows,
             },
         )
+
+        import pyarrow.ipc as ipc
 
         reader = ipc.open_stream(response.content)
         table = reader.read_all()
