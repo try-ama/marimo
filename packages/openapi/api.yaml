@@ -1235,7 +1235,11 @@ components:
         \ `auto_discover_schemas`: if `True`, include schemas in the datasource\n\
         \    - `auto_discover_tables`: if `True`, include tables in the datasource\n\
         \    - `auto_discover_columns`: if `True`, include columns & table metadata\
-        \ in the datasource"
+        \ in the datasource\n    - `dcp_enabled`: if `True`, enable auto-discovery\
+        \ of DCP data sources.\n      If not set, auto-detected from the presence\
+        \ of a DCP token env var.\n      When enabled, only DuckDB and DCP engines\
+        \ are available.\n    - `dcp_base_url`: base URL of the DCP server. Falls\
+        \ back to\n      ``MARIMO_DCP_BASE_URL`` / ``AMA_BASE_URL`` env vars."
       properties:
         auto_discover_columns:
           anyOf:
@@ -1252,6 +1256,10 @@ components:
           - type: boolean
           - enum:
             - auto
+        dcp_base_url:
+          type: string
+        dcp_enabled:
+          type: boolean
       required: []
       title: DatasourcesConfig
       type: object
