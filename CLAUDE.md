@@ -60,16 +60,16 @@ upstream -> marimo-team/marimo (original)
 ### Branch Strategy
 
 - **`main`**: Mirror of upstream. NEVER commit directly.
-- **Feature branches**: All custom work goes here (e.g., `ama-integrations`)
+- **`fork`**: Our working main branch. All custom work lives here.
+- **Feature branches**: Branch off `fork`, merge back into `fork`.
 
 ### Starting a New Feature
 
 ```bash
-# 1. Ensure main is synced with upstream
-uvx hatch run fork-sync-main
+# 1. Ensure fork is up to date
+git checkout fork
 
-# 2. Create feature branch from main
-git checkout main
+# 2. Create feature branch from fork
 git checkout -b my-feature-name
 
 # 3. Make changes, commit normally
@@ -83,23 +83,25 @@ git push -u origin my-feature-name
 ### Shipping Changes to Fork
 
 ```bash
-# Push your feature branch
-git push origin my-feature-name
+# Push directly to fork branch
+git checkout fork
+git push origin fork
 
 # Or after rebasing (use --force-with-lease for safety)
 uvx hatch run fork-push-branch
 ```
 
-### Keeping Feature Branch Updated
+### Keeping Fork Updated with Upstream
 
 ```bash
 # 1. Sync main with upstream
 uvx hatch run fork-full-sync
 
-# 2. Rebase your branch onto updated main
+# 2. Rebase fork onto updated main
+git checkout fork
 uvx hatch run fork-rebase-branch
 
-# 3. Push rebased branch (force-with-lease)
+# 3. Push rebased fork branch (force-with-lease)
 uvx hatch run fork-push-branch
 ```
 
@@ -119,17 +121,18 @@ uvx hatch run fork-push-branch
 
 1. **NEVER create PRs against upstream (marimo-team/marimo)** - All PRs go to our fork only
 2. **Never commit to main** - It mirrors upstream
-3. **Never use `--force`** - Always use `--force-with-lease` (scripts do this)
-4. **Sync before branching** - Run `fork-sync-main` before starting new work
-5. **Document customizations** - Update FORK.md when adding features
+3. **Commit custom work to `fork` branch** - This is our working main
+4. **Never use `--force`** - Always use `--force-with-lease` (scripts do this)
+5. **Sync before branching** - Ensure `fork` is rebased on latest `main`
+6. **Document customizations** - Update FORK.md when adding features
 
 ### Creating Pull Requests
 
-Always specify the fork repo explicitly to avoid accidentally targeting upstream:
+Always specify the fork repo and base branch explicitly to avoid accidentally targeting upstream:
 
 ```bash
-# CORRECT: PR against our fork
-gh pr create --repo try-ama/marimo --base main
+# CORRECT: PR against our fork's fork branch
+gh pr create --repo try-ama/marimo --base fork
 
 # WRONG: Don't use bare `gh pr create` - it may target upstream
 ```

@@ -6,8 +6,9 @@ This is a fork of [marimo-team/marimo](https://github.com/marimo-team/marimo) ma
 
 We maintain a long-running fork that:
 - Keeps `main` as a mirror of upstream (never commit directly)
-- Uses feature branches (e.g., `ama-integrations`) for custom features
-- Rebases feature branches onto `main` periodically
+- Uses the `fork` branch as our working main branch (all custom work lives here)
+- Creates feature branches off `fork` for new work, merged back into `fork`
+- Rebases `fork` onto `main` periodically to stay current with upstream
 
 ## Remotes
 
@@ -58,7 +59,8 @@ uvx hatch run fork-status
 uvx hatch run fork-sync-main
 uvx hatch run fork-push-main
 
-# 3. If on a feature branch, rebase it
+# 3. Rebase fork onto updated main
+git checkout fork
 uvx hatch run fork-rebase-branch
 uvx hatch run fork-push-branch
 ```
@@ -87,7 +89,7 @@ If conflicts occur during `fork-rebase-branch`:
 ```toml
 [project]
 dependencies = [
-    "marimo @ git+https://github.com/try-ama/marimo.git@ama-integrations",
+    "marimo @ git+https://github.com/try-ama/marimo.git@fork",
 ]
 ```
 
@@ -101,7 +103,7 @@ dependencies = [
 
 Or with uv:
 ```bash
-uv add "marimo @ git+https://github.com/try-ama/marimo.git@ama-integrations"
+uv add "marimo @ git+https://github.com/try-ama/marimo.git@fork"
 ```
 
 ## Build & Release Process
@@ -111,7 +113,7 @@ The fork uses GitHub Actions to automatically build frontend assets and Python w
 ### Automatic Builds
 
 Every push to these branches triggers a build:
-- `main` - Auto-creates a GitHub release
+- `fork` - Auto-creates a GitHub release
 - `ama-*` - Builds only, no release
 - `feat/*`, `feature/*` - Builds only, no release
 
