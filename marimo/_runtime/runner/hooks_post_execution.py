@@ -167,23 +167,36 @@ def _broadcast_data_source_connection(
     ctx: PostExecutionHookContext,
     run_result: cell_runner.RunResult,
 ) -> None:
+    del run_result
+
+    from marimo._runtime.context.kernel_context import KernelRuntimeContext
+    from marimo._session.model import SessionMode
+
+    runtime_ctx = get_context()
+    is_edit_mode = (
+        isinstance(runtime_ctx, KernelRuntimeContext)
+        and runtime_ctx.session_mode == SessionMode.EDIT
+    )
+
+    # DCP connections are platform-managed and should broadcast in edit mode
+    # even when embedded — they aren't user variables tied to a specific graph.
+    if is_edit_mode:
+        from marimo._sql.dcp_registry import DCPRegistry, is_dcp_enabled
+
+        if is_dcp_enabled():
+            dcp_connections = DCPRegistry.get().get_connections()
+            if dcp_connections:
+                LOGGER.debug("Broadcasting DCP data source connections")
+                broadcast_notification(
+                    DataSourceConnectionsNotification(
+                        connections=dcp_connections
+                    )
+                )
+
+    # User-defined SQL engines respect the full check (skipped when embedded).
     if not ctx.should_broadcast_data:
         return
 
-    del run_result
-
-    from marimo._sql.dcp_registry import DCPRegistry, is_dcp_enabled
-
-    # Broadcast auto-discovered DCP engines if DCP is configured.
-    if is_dcp_enabled():
-        dcp_connections = DCPRegistry.get().get_connections()
-        if dcp_connections:
-            LOGGER.debug("Broadcasting DCP data source connections")
-            broadcast_notification(
-                DataSourceConnectionsNotification(connections=dcp_connections)
-            )
-
-    # Also broadcast any user-defined SQL engines found in cell variables.
     engines = get_engines_from_variables(
         [
             (VariableName(variable), ctx.glbls[variable])
