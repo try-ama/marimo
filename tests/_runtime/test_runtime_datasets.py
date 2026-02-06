@@ -22,6 +22,8 @@ from marimo._runtime.commands import (
     PreviewSQLTableCommand,
     ValidateSQLCommand,
 )
+from marimo._runtime.context.types import get_context
+from marimo._session.model import SessionMode
 from marimo._sql.engines.duckdb import INTERNAL_DUCKDB_ENGINE
 from marimo._sql.parse import SqlCatalogCheckResult, SqlParseResult
 from marimo._types.ids import CellId_t, RequestId
@@ -744,3 +746,177 @@ class TestSQLValidate:
             validate_result=None,
             error="Engine is required for validating catalog",
         )
+
+
+class TestDCPBroadcastInEmbeddedMode:
+    """DCP connections are platform-managed and should broadcast even when
+    the kernel is running in an embedded context (``App.embed()``).
+    """
+
+    async def test_dcp_connections_broadcast_when_embedded(
+        self,
+        mocked_kernel: MockedKernel,
+    ) -> None:
+        """DCP connections should be broadcast in edit mode even when embedded."""
+        from unittest.mock import MagicMock, patch
+
+        from marimo._data.models import DataSourceConnection
+        from marimo._runtime.runner.hooks_post_execution import (
+            _broadcast_data_source_connection,
+        )
+
+        ctx = get_context()
+        # Simulate embedded mode by setting a parent
+        original_parent = ctx.parent
+        ctx.parent = MagicMock()  # non-None parent → is_embedded() == True
+        assert ctx.is_embedded()
+
+        fake_connection = DataSourceConnection(
+            source="dcp",
+            dialect="postgresql",
+            name="__dcp_test_connector",
+            display_name="Test DCP Connector",
+            databases=[],
+            default_database=None,
+            default_schema=None,
+        )
+
+        mock_cell = MagicMock()
+        mock_cell.defs = []
+        mock_runner = MagicMock()
+        mock_runner.glbls = {}
+        mock_run_result = MagicMock()
+
+        stream = mocked_kernel.stream
+
+        try:
+            with (
+                patch(
+                    "marimo._sql.dcp_registry.is_dcp_enabled",
+                    return_value=True,
+                ),
+                patch(
+                    "marimo._sql.dcp_registry.DCPRegistry"
+                ) as mock_registry_cls,
+            ):
+                mock_registry = MagicMock()
+                mock_registry.get_connections.return_value = [fake_connection]
+                mock_registry_cls.get.return_value = mock_registry
+
+                # Clear previous operations
+                stream.operations.clear()
+
+                _broadcast_data_source_connection(
+                    mock_cell, mock_runner, mock_run_result
+                )
+
+            dcp_notifications = [
+                op
+                for op in stream.operations
+                if isinstance(op, DataSourceConnectionsNotification)
+            ]
+            assert len(dcp_notifications) == 1
+            assert dcp_notifications[0].connections == [fake_connection]
+        finally:
+            ctx.parent = original_parent
+
+    async def test_dcp_connections_not_broadcast_in_run_mode(
+        self,
+        mocked_kernel: MockedKernel,
+    ) -> None:
+        """DCP connections should NOT be broadcast in run mode."""
+        from unittest.mock import MagicMock, patch
+
+        from marimo._runtime.runner.hooks_post_execution import (
+            _broadcast_data_source_connection,
+        )
+
+        # MockedKernel defaults to EDIT mode; switch to RUN
+        ctx = get_context()
+        original_mode = ctx._session_mode
+        ctx._session_mode = SessionMode.RUN
+
+        mock_cell = MagicMock()
+        mock_cell.defs = []
+        mock_runner = MagicMock()
+        mock_runner.glbls = {}
+        mock_run_result = MagicMock()
+
+        stream = mocked_kernel.stream
+
+        try:
+            with patch(
+                "marimo._sql.dcp_registry.is_dcp_enabled",
+                return_value=True,
+            ) as mock_enabled:
+                stream.operations.clear()
+
+                _broadcast_data_source_connection(
+                    mock_cell, mock_runner, mock_run_result
+                )
+
+                # is_dcp_enabled should never be called in run mode
+                mock_enabled.assert_not_called()
+
+            dcp_notifications = [
+                op
+                for op in stream.operations
+                if isinstance(op, DataSourceConnectionsNotification)
+            ]
+            assert len(dcp_notifications) == 0
+        finally:
+            ctx._session_mode = original_mode
+
+    async def test_user_engines_not_broadcast_when_embedded(
+        self,
+        mocked_kernel: MockedKernel,
+    ) -> None:
+        """User-defined SQL engines should still be suppressed when embedded."""
+        from unittest.mock import MagicMock, patch
+
+        from marimo._runtime.runner.hooks_post_execution import (
+            _broadcast_data_source_connection,
+        )
+
+        ctx = get_context()
+        original_parent = ctx.parent
+        ctx.parent = MagicMock()  # embedded
+        assert ctx.is_embedded()
+
+        mock_cell = MagicMock()
+        mock_cell.defs = ["my_engine"]
+        mock_runner = MagicMock()
+        mock_runner.glbls = {"my_engine": MagicMock()}
+        mock_run_result = MagicMock()
+
+        stream = mocked_kernel.stream
+
+        try:
+            with (
+                patch(
+                    "marimo._sql.dcp_registry.is_dcp_enabled",
+                    return_value=False,
+                ),
+                patch(
+                    "marimo._runtime.runner.hooks_post_execution.get_engines_from_variables",
+                    return_value=[],
+                ) as mock_get_engines,
+            ):
+                stream.operations.clear()
+
+                _broadcast_data_source_connection(
+                    mock_cell, mock_runner, mock_run_result
+                )
+
+                # _should_broadcast_data() returns False when embedded,
+                # so get_engines_from_variables should never be called
+                mock_get_engines.assert_not_called()
+
+            dcp_notifications = [
+                op
+                for op in stream.operations
+                if isinstance(op, DataSourceConnectionsNotification)
+            ]
+            assert len(dcp_notifications) == 0
+        finally:
+            ctx.parent = original_parent
