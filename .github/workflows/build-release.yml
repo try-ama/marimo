@@ -2,7 +2,7 @@ name: Build & Release
 
 on:
   push:
-    branches: [main, 'ama-*', 'feat/*', 'feature/*']
+    branches: [fork]
   workflow_dispatch:
     inputs:
       create_release:
@@ -74,8 +74,8 @@ jobs:
 
   release:
     needs: build
-    # Auto-release on main, or manual trigger with create_release
-    if: github.ref == 'refs/heads/main' || github.event.inputs.create_release == 'true'
+    # Auto-release on fork branch, or manual trigger with create_release
+    if: github.ref == 'refs/heads/fork' || github.event.inputs.create_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -113,7 +113,7 @@ jobs:
   # Deploy assets to GitHub Pages (avoids release asset rate limits)
   deploy-assets:
     needs: build
-    if: github.ref == 'refs/heads/main' || github.event.inputs.create_release == 'true'
+    if: github.ref == 'refs/heads/fork' || github.event.inputs.create_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
