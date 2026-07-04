@@ -125,7 +125,7 @@ def _raise_dcp_error(status_code: int, response: Any) -> None:
 class _CacheEntry:
     """Simple TTL cache entry."""
 
-    __slots__ = ("value", "expires_at")
+    __slots__ = ("expires_at", "value")
 
     def __init__(self, value: Any, ttl_seconds: float) -> None:
         self.value = value
@@ -234,7 +234,7 @@ class DCPEngine(SQLConnection[DCPConnection]):
             },
         )
 
-        import pyarrow.ipc as ipc
+        from pyarrow import ipc
 
         reader = ipc.open_stream(response.content)
         table = reader.read_all()
@@ -322,16 +322,43 @@ class DCPEngine(SQLConnection[DCPConnection]):
             )
         ]
 
-    def get_tables_in_schema(
-        self, *, schema: str, database: str, include_table_details: bool
-    ) -> list[DataTable]:
+    def get_schemas(
+        self,
+        *,
+        database: Optional[str],
+        include_tables: bool,
+        include_table_details: bool,
+        schema_path: Optional[list[str]] = None,
+    ) -> list[Schema]:
         _ = database
+        if schema_path:
+            # DCP is a flat engine; there are no nested namespaces
+            return []
+        return self._fetch_schemas(
+            include_tables=include_tables,
+            include_table_details=include_table_details,
+        )
+
+    def get_tables_in_schema(
+        self,
+        *,
+        schema: str,
+        database: str,
+        include_table_details: bool,
+        schema_path: Optional[list[str]] = None,
+    ) -> list[DataTable]:
+        _, _ = database, schema_path
         return self._fetch_tables(schema, include_table_details)
 
     def get_table_details(
-        self, *, table_name: str, schema_name: str, database_name: str
+        self,
+        *,
+        table_name: str,
+        schema_name: str,
+        database_name: str,
+        schema_path: Optional[list[str]] = None,
     ) -> Optional[DataTable]:
-        _ = database_name
+        _, _ = database_name, schema_path
         return self._fetch_table_detail(table_name, schema_name)
 
     # ── Private catalog helpers ──────────────────────────────────

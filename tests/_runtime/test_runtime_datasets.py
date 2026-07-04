@@ -761,6 +761,7 @@ class TestDCPBroadcastInEmbeddedMode:
         from unittest.mock import MagicMock, patch
 
         from marimo._data.models import DataSourceConnection
+        from marimo._runtime.runner.cell_runner import _should_broadcast_data
         from marimo._runtime.runner.hooks_post_execution import (
             _broadcast_data_source_connection,
         )
@@ -783,8 +784,11 @@ class TestDCPBroadcastInEmbeddedMode:
 
         mock_cell = MagicMock()
         mock_cell.defs = []
-        mock_runner = MagicMock()
-        mock_runner.glbls = {}
+        mock_hook_ctx = MagicMock()
+        mock_hook_ctx.glbls = {}
+        # Embedded → the runner would compute should_broadcast_data=False
+        mock_hook_ctx.should_broadcast_data = _should_broadcast_data()
+        assert mock_hook_ctx.should_broadcast_data is False
         mock_run_result = MagicMock()
 
         stream = mocked_kernel.stream
@@ -807,7 +811,7 @@ class TestDCPBroadcastInEmbeddedMode:
                 stream.operations.clear()
 
                 _broadcast_data_source_connection(
-                    mock_cell, mock_runner, mock_run_result
+                    mock_cell, mock_hook_ctx, mock_run_result
                 )
 
             dcp_notifications = [
@@ -827,6 +831,7 @@ class TestDCPBroadcastInEmbeddedMode:
         """DCP connections should NOT be broadcast in run mode."""
         from unittest.mock import MagicMock, patch
 
+        from marimo._runtime.runner.cell_runner import _should_broadcast_data
         from marimo._runtime.runner.hooks_post_execution import (
             _broadcast_data_source_connection,
         )
@@ -838,8 +843,11 @@ class TestDCPBroadcastInEmbeddedMode:
 
         mock_cell = MagicMock()
         mock_cell.defs = []
-        mock_runner = MagicMock()
-        mock_runner.glbls = {}
+        mock_hook_ctx = MagicMock()
+        mock_hook_ctx.glbls = {}
+        # Run mode → the runner would compute should_broadcast_data=False
+        mock_hook_ctx.should_broadcast_data = _should_broadcast_data()
+        assert mock_hook_ctx.should_broadcast_data is False
         mock_run_result = MagicMock()
 
         stream = mocked_kernel.stream
@@ -852,7 +860,7 @@ class TestDCPBroadcastInEmbeddedMode:
                 stream.operations.clear()
 
                 _broadcast_data_source_connection(
-                    mock_cell, mock_runner, mock_run_result
+                    mock_cell, mock_hook_ctx, mock_run_result
                 )
 
                 # is_dcp_enabled should never be called in run mode
@@ -874,6 +882,7 @@ class TestDCPBroadcastInEmbeddedMode:
         """User-defined SQL engines should still be suppressed when embedded."""
         from unittest.mock import MagicMock, patch
 
+        from marimo._runtime.runner.cell_runner import _should_broadcast_data
         from marimo._runtime.runner.hooks_post_execution import (
             _broadcast_data_source_connection,
         )
@@ -885,8 +894,11 @@ class TestDCPBroadcastInEmbeddedMode:
 
         mock_cell = MagicMock()
         mock_cell.defs = ["my_engine"]
-        mock_runner = MagicMock()
-        mock_runner.glbls = {"my_engine": MagicMock()}
+        mock_hook_ctx = MagicMock()
+        mock_hook_ctx.glbls = {"my_engine": MagicMock()}
+        # Embedded → the runner would compute should_broadcast_data=False
+        mock_hook_ctx.should_broadcast_data = _should_broadcast_data()
+        assert mock_hook_ctx.should_broadcast_data is False
         mock_run_result = MagicMock()
 
         stream = mocked_kernel.stream
@@ -905,7 +917,7 @@ class TestDCPBroadcastInEmbeddedMode:
                 stream.operations.clear()
 
                 _broadcast_data_source_connection(
-                    mock_cell, mock_runner, mock_run_result
+                    mock_cell, mock_hook_ctx, mock_run_result
                 )
 
                 # _should_broadcast_data() returns False when embedded,

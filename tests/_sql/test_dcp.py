@@ -291,7 +291,7 @@ def test_execute_returns_polars(
     mock_request: MagicMock, dcp_engine: DCPEngine
 ) -> None:
     import pyarrow as pa
-    import pyarrow.ipc as ipc
+    from pyarrow import ipc
 
     # Build Arrow IPC bytes
     table = pa.table({"id": [1, 2, 3], "name": ["a", "b", "c"]})
@@ -634,7 +634,7 @@ def test_execute_never_cached(
     mock_request: MagicMock, dcp_engine: DCPEngine
 ) -> None:
     import pyarrow as pa
-    import pyarrow.ipc as ipc
+    from pyarrow import ipc
 
     table = pa.table({"x": [1]})
     sink = pa.BufferOutputStream()

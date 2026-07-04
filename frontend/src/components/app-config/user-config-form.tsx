@@ -1288,58 +1288,23 @@ export const UserConfigForm: React.FC = () => {
                 </div>
               )}
             />
-            <FormField
-              control={form.control}
-              name="experimental.server_side_pdf_export"
-              render={({ field }) => (
-                <div className="flex flex-col gap-y-1">
-                  <FormItem className={formItemClasses}>
-                    <FormLabel className="font-normal">
-                      Better PDF Export
-                    </FormLabel>
-                    <FormControl>
-                      <Checkbox
-                        data-testid="server-side-pdf-export-checkbox"
-                        checked={field.value === true}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                  <IsOverridden
-                    userConfig={config}
-                    name="experimental.server_side_pdf_export"
-                  />
-                  <FormDescription>
-                    Enable PDF export using{" "}
-                    <Kbd className="inline">nbconvert</Kbd> and{" "}
-                    <Kbd className="inline">playwright</Kbd>. Refer to{" "}
-                    <ExternalLink href="https://docs.marimo.io/guides/exporting/#exporting-to-pdf-slides-or-rst">
-                      the docs
-                    </ExternalLink>
-                    .
-                  </FormDescription>
-                </div>
-              )}
-            />
-            <FormField
+            <OverriddenFormField
               control={form.control}
               name="experimental.custom_fonts"
-              render={({ field }) => (
+              render={({ field, override }) => (
                 <div className="flex flex-col gap-y-1">
                   <FormItem className={formItemClasses}>
                     <FormLabel className="font-normal">Custom Fonts</FormLabel>
                     <FormControl>
                       <Checkbox
                         data-testid="custom-fonts-checkbox"
-                        checked={field.value === true}
+                        checked={override.value === true}
+                        disabled={override.isOverridden}
                         onCheckedChange={field.onChange}
                       />
                     </FormControl>
                   </FormItem>
-                  <IsOverridden
-                    userConfig={config}
-                    name="experimental.custom_fonts"
-                  />
+                  <IsOverridden override={override} />
                   <FormDescription>
                     Use custom fonts: Lilex for code and Geist Sans for UI text.
                     Requires a page refresh to take effect.
