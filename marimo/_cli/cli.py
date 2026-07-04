@@ -517,6 +517,13 @@ def edit(
         elif not is_dir:
             # write empty file
             try:
+                # ama fork: when notebooks live in object storage the local
+                # file is only a placeholder/cache on a stateless container —
+                # create the parent directory instead of failing.
+                if os.environ.get("NOTEBOOK_STORAGE_BACKEND"):
+                    parent_dir = os.path.dirname(name)
+                    if parent_dir:
+                        os.makedirs(parent_dir, exist_ok=True)
                 with open(name, "w", encoding="utf-8"):
                     pass
             except OSError as e:

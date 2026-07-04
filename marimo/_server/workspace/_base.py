@@ -71,11 +71,19 @@ class NotebookWorkspace(abc.ABC):
         Built on top of :meth:`resolve` — subclasses customize `resolve` and
         inherit the right `load` semantics for free.
         """
+        from marimo._session.notebook.storage_env import (
+            notebook_storage_from_env,
+        )
+
         defaults = defaults or AppDefaults()
         resolved = self.resolve(key)
         if resolved is None:
             return AppFileManager(None, defaults=defaults)
-        return AppFileManager(resolved, defaults=defaults)
+        return AppFileManager(
+            resolved,
+            storage=notebook_storage_from_env(resolved),
+            defaults=defaults,
+        )
 
     def get_single_app_file_manager(
         self,

@@ -22,9 +22,19 @@ def load_notebook(
     The path is validated as a marimo source file (`.py` / `.md` / `.qmd`)
     and resolved to an absolute path before being handed to the file manager,
     so a later `chdir` cannot change which file the manager points at.
+
+    When the environment configures object storage (see
+    `marimo._session.notebook.storage_env`), reads/writes are routed there
+    instead of the local filesystem.
     """
+    from marimo._session.notebook.storage_env import notebook_storage_from_env
+
     marimo_path = MarimoPath(path)
-    return AppFileManager(marimo_path.absolute_name, defaults=defaults)
+    return AppFileManager(
+        marimo_path.absolute_name,
+        storage=notebook_storage_from_env(marimo_path.absolute_name),
+        defaults=defaults,
+    )
 
 
 def new_notebook(
