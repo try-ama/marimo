@@ -2,6 +2,24 @@
 
 This is a fork of [marimo-team/marimo](https://github.com/marimo-team/marimo) maintained by try-ama.
 
+## Why this fork exists
+
+This fork is the **notebook surface of [Ama](https://github.com/try-ama/ama)**, the
+agent-first notebook platform. Ama runs marimo kernels in per-notebook containers
+and proxies agents (over MCP) and humans (browser) into the same shared kernel.
+
+The fundamental connection point between the two repos is **DCP** — the Data
+Connector Protocol (Ama RFC-022). Ama's server exposes governed, read-only data
+sources (Snowflake, PostgreSQL, ClickHouse, MySQL) at `/dcp/v1/*`; this fork
+carries the client: a `DCPEngine` SQL engine plus a registry that auto-discovers
+connectors when a kernel boots, using the `AMA_BASE_URL` / `AMA_NOTEBOOK_TOKEN`
+environment variables that Ama injects into each notebook container. Data sources
+appear in the notebook's sources panel with no drivers or credentials in the
+notebook itself.
+
+Everything else in the fork (S3 notebook storage, embedding/panel mode, fork CI)
+exists to make marimo run well inside that platform.
+
 ## Fork Strategy
 
 We maintain a long-running fork that:
@@ -76,12 +94,50 @@ If conflicts occur during `fork-rebase-branch`:
 
 ## Custom Features
 
-<!-- Document your customizations here -->
+The full delta is visible with `git diff origin/main...fork`. Current customizations:
 
-### 1. [Feature Name] (files modified)
-- Description of what was changed
-- Why it was necessary
-- Files modified: `path/to/file.py`
+### 1. DCP SQL engine (the Ama connection point)
+- `DCPEngine` + `DCPConnection`: a `SQLConnection` implementation that executes
+  SQL cells over HTTP against Ama's DCP server and parses Arrow IPC responses
+  into Polars DataFrames. Catalog methods populate the data sources panel.
+- `dcp_registry.py`: singleton registry that calls `GET /dcp/v1/connectors` on
+  kernel init and registers one virtual engine per connector
+  (e.g. `__dcp_snowflake_prod`). Auth token from `MARIMO_DCP_TOKEN`, falling back
+  to `AMA_NOTEBOOK_TOKEN` (env vars only — never config files).
+- Files: `marimo/_sql/engines/dcp.py`, `marimo/_sql/dcp_registry.py`,
+  `marimo/_sql/get_engines.py` (registered ahead of SQLAlchemy/DuckDB),
+  `tests/_sql/test_dcp.py`.
+
+### 2. S3 notebook storage
+- Persists notebooks to S3 so Ama's containerized kernels are stateless.
+- Files: `marimo/_session/notebook/s3_storage.py`, `marimo/_session/notebook/__init__.py`.
+
+### 3. Embedding / panel mode
+- Config-driven embedding features for running marimo inside the Ama frontend:
+  panel visibility, chrome/sidebar adjustments, DCP connection broadcasting to
+  the datasources panel, cached cell execution hooks.
+- Files: `marimo/_config/config.py`, `marimo/_runtime/runtime.py`,
+  `marimo/_runtime/runner/hooks_post_execution.py`,
+  `frontend/src/core/config/embedding.ts`,
+  `frontend/src/core/config/IfEmbeddingFeature.tsx`, plus chrome/sidebar/
+  datasources component changes.
+
+### 4. Display / fonts
+- Custom font loading (Lilex, Geist Sans) behind a feature flag.
+- Files: `frontend/src/hooks/useFontLoader.ts`, `frontend/src/theme/ThemeProvider.tsx`.
+
+### 5. Fork CI
+- Upstream release workflows removed; fork build/release automation and an
+  upstream drift check added (`.github/workflows/upstream-check.yml`,
+  `build-release.yml`). See "Build & Release Process" below.
+
+### Design notes
+- `docs/rfc-embedding-marimo-agentic.md` and
+  `docs/rfc-embedding-marimo-agentic-frontend.md` — the RFCs behind the
+  embedding work.
+- Ama-side spec: `docs/DCP_MARIMO_INTEGRATION.md` and
+  `docs/rfcs/RFC-022-data-connector-protocol.md` in the
+  [try-ama/ama](https://github.com/try-ama/ama) repo.
 
 ## Installation in Other Projects
 
